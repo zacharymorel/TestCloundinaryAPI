@@ -4,10 +4,11 @@ const bodyParser = require("body-parser");
 const path = require("path");
 const fileUpload = require("express-fileupload");
 const fs = require("fs")
+const async = require("async")
 
 const app = express();
 const keys = require("./config");
-console.log("keys", keys);
+// console.log("keys", keys);
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -18,17 +19,12 @@ app.use(fileUpload());
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "jade");
 
-// cloudinary.config({
-//   cloud_name: process.env.COULDIYFA_CLOUD_NAME || keys.COULDIYFA_CLOUD_NAME,
-//   api_key: process.env.COULDIYFA_API_KEY || keys.COULDIYFA_API_KEY,
-//   api_secret: process.env.CLOUDIFYA_API_SECRET || keys.CLOUDIFYA_API_SECRET
-// });
-
 cloudinary.config({
-  cloud_name: "madbeard",
-  api_key: "437184119445437",
-  api_secret: "QkFrttKYjxfrOrNoFPPLpJZCiwg"
+  cloud_name: process.env.COULDIYFA_CLOUD_NAME || keys.COULDIYFA_CLOUD_NAME,
+  api_key: process.env.COULDIYFA_API_KEY || keys.COULDIYFA_API_KEY,
+  api_secret: process.env.CLOUDIFYA_API_SECRET || keys.CLOUDIFYA_API_SECRET
 });
+
 
 // =============================
 // ========== GET ==============
@@ -62,31 +58,75 @@ const genGuid = () => {
 // ==============================
 // ============ POST ============
 // ==============================
-app.post("/image", (req, res) => {
+// app.post("/image-old", (req, res) => {
   
-  // add the file to server to a temp folder -- so we can get a file path
+//   // add the file to server to a temp folder -- so we can get a file path
+//   const _filePath = __dirname + "/uploads/" + genGuid() + "_" + req.files.image.name;
+//   console.log("saving to ", _filePath);
+//   req.files.image.mv(_filePath, err => {
+//     console.log("saved file","err:", err);
+//     // upload the file with that new path
+//     cloudinary.uploader.upload(_filePath, (result) => {
+//       console.log("uploaded", result);
+//       // delete the file from the temp folder after we have confirmed the upload
+//       fs.unlink(_filePath, (err)=>{
+//         console.log("deleted file", "err =>", err)
+//         // save secure_url to database
+//         res.redirect("/");
+//       })
+//     });
+//   });
+
+//   // console.log('2', req.files.image,req.files.image.data.length, typeof _data)
+// });
+
+// ==============================
+// ============ POST ============
+// ==============================
+app.post("/image", (req, res) => {
+
   const _filePath = __dirname + "/uploads/" + genGuid() + "_" + req.files.image.name;
-  console.log("saving to ", _filePath);
-  req.files.image.mv(_filePath, err => {
-    console.log("saved file","err:", err);
-    // upload the file with that new path
+  let secure_url = "";
+  // add the file to server to a temp folder -- so we can get a file path
+  const saveFile = (next) => {
+    console.log("saving to ", _filePath);
+    req.files.image.mv(_filePath, err => {
+      console.log("saved file","err:", err);
+      next();
+    });
+  }
+
+  // upload the file with that new path
+  const uploadToStorage = (next) => {
     cloudinary.uploader.upload(_filePath, (result) => {
       console.log("uploaded", result);
-      // delete the file from the temp folder after we have confirmed the upload
-      fs.unlink(_filePath, (err)=>{
-        console.log("deleted file", "err =>", err)
-        // save secure_url to database
-        res.redirect("/");
-      })
+      secure_url = result.secure_url;
+      next()
     });
-  });
+  }
+  
+  // delete the file from the temp folder after we have confirmed the upload
+  const deleteFile = (next) => {
+    fs.unlink(_filePath, (err)=>{
+      console.log("deleted file", "err =>", err)
+      next();
+    });
+  }
 
-  // console.log('2', req.files.image,req.files.image.data.length, typeof _data)
-});
+  // TODO: save secure_url to database
+  const saveToDatabase = (next) =>{
+    // do that here
+    console.log("saving to databse", secure_url)
+    next();
+  }
 
-// upload a image to cloudnary from HTML
+  const tasks = [saveFile, uploadToStorage, deleteFile, saveToDatabase]
 
-// display the secure_url to console
+  async.waterfall(tasks, (err) => {
+    console.log("complete", "error was" ,err)
+    res.redirect("/");
+  })
+})
 
 app.listen(3000, () => {
   console.log("the current dir is", __dirname)
