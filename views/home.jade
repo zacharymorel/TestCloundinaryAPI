@@ -1,6 +1,6 @@
 extends layout
 
 block content
-    form(action="/image", method="post")
+    form(action="/image", method="post", encType="multipart/form-data")
         input(type="file" name="image" accept="image/*")
         input(type="submit")
